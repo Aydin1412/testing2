@@ -1,14 +1,10 @@
 import { useEffect, useRef, useState } from "react";
 import { embedDashboard } from "@superset-ui/embedded-sdk";
 
-const DASHBOARD_ID = "bc542f3f-0b0f-4534-86df-d776b11a3807";
-// bc542f3f-0b0f-4534-86df-d776b11a3807
-// 1fe3a335-46b9-4b44-b1e0-dd32f8b117c7
+const DASHBOARD_ID = "2c5b735e-52d0-417b-a6ee-8db9494f187d";
 
 // 🔥 your real filter ID
 const FILTER_ID = "NATIVE_FILTER-rpYb2IKm_JiYgXccnpDIl";
-// NATIVE_FILTER-rpYb2IKm_JiYgXccnpDIl
-// NATIVE_FILTER-ltkRKiG8bf4owH5JXs8fo
 
 export default function SupersetEmbed() {
   const ref = useRef<HTMLDivElement>(null);
@@ -44,7 +40,7 @@ export default function SupersetEmbed() {
           },
         },
       },
-      "http://localhost:8088"
+      "http://159.65.7.49:8088"
     );
 
     // 2️⃣ Apply filters (🔥 required)
@@ -53,7 +49,7 @@ export default function SupersetEmbed() {
         {
           type: "applyFilters",
         },
-        "http://localhost:8088"
+        "http://159.65.7.49:8088"
       );
     }, 200);
   };
@@ -63,12 +59,20 @@ export default function SupersetEmbed() {
 
     const load = async () => {
       const fetchGuestToken = async () => {
-        const res = await fetch("http://localhost:8081/superset/guest-token", {
+        
+        // 🔥 MOCK JWT: This simulates the user's login token in your React app.
+        // The payload inside decodes to: {"tenant":"KAJ","subtenant":"BEKASI"}
+        const mockJwt = "eyJhbGciOiJub25lIiwidHlwIjoiSldUIn0.eyJ0ZW5hbnQiOiJBTFNBTlRPIiwic3VidGVuYW50IjoiQUxTQU5UTyJ9.";
+
+        const res = await fetch("http://172.29.121.22:8081/superset/guest-token", {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: { 
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${mockJwt}` // Sending credentials to backend
+          },
           body: JSON.stringify({
             dashboardId: DASHBOARD_ID,
-            tenant: "KAJ",
+            // Removed 'tenant' from here!
           }),
         });
 
@@ -78,7 +82,7 @@ export default function SupersetEmbed() {
 
       const embed = await embedDashboard({
         id: DASHBOARD_ID,
-        supersetDomain: "http://localhost:8088",
+        supersetDomain: "http://159.65.7.49:8088",
         mountPoint: ref.current!,
         fetchGuestToken,
       });

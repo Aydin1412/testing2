@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"io"
@@ -9,6 +10,7 @@ import (
 	"net/http"
 	"net/http/cookiejar"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/joho/godotenv"
@@ -19,7 +21,6 @@ import (
 // ==============================
 type GuestTokenRequest struct {
 	DashboardID string `json:"dashboardId"`
-	Tenant      string `json:"tenant"` // 🔥 dynamic tenant
 }
 
 // ==============================
@@ -97,9 +98,10 @@ func guestTokenHandler(w http.ResponseWriter, r *http.Request) {
 	// ==========================
 	// CORS
 	// ==========================
-	w.Header().Set("Access-Control-Allow-Origin", "http://localhost:3000")
+	w.Header().Set("Access-Control-Allow-Origin", "http://172.29.121.22:3000")
 	w.Header().Set("Access-Control-Allow-Methods", "POST, OPTIONS")
-	w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
+	// Allow Authorization header
+	w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
 
 	if r.Method == http.MethodOptions {
 		w.WriteHeader(http.StatusNoContent)
@@ -109,6 +111,50 @@ func guestTokenHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
+	}
+
+	// ==========================
+	// 1. EXTRACT JWT FROM HEADER
+	// ==========================
+	authHeader := r.Header.Get("Authorization")
+	if authHeader == "" {
+		http.Error(w, "Missing Authorization header", http.StatusUnauthorized)
+		return
+	}
+	fossilToken := strings.TrimPrefix(authHeader, "Bearer ")
+
+	// ==========================
+	// 2. PARSE JWT PAYLOAD
+	// ==========================
+	tokenParts := strings.Split(fossilToken, ".")
+	if len(tokenParts) != 3 {
+		http.Error(w, "Invalid JWT format", http.StatusUnauthorized)
+		return
+	}
+
+	// Decode Base64 payload
+	payloadBytesDecoded, err := base64.RawURLEncoding.DecodeString(tokenParts[1])
+	if err != nil {
+		log.Println("Error decoding JWT:", err)
+		http.Error(w, "Invalid JWT payload", http.StatusUnauthorized)
+		return
+	}
+
+	var claims map[string]interface{}
+	if err := json.Unmarshal(payloadBytesDecoded, &claims); err != nil {
+		http.Error(w, "Failed to parse JWT claims", http.StatusUnauthorized)
+		return
+	}
+
+	// Extract Tenant and Subtenant
+	fossilTenant, _ := claims["tenant"].(string)
+	if fossilTenant == "" {
+		fossilTenant = "NULL"
+	}
+
+	fossilSubtenant, _ := claims["subtenant"].(string)
+	if fossilSubtenant == "" {
+		fossilSubtenant = "NULL"
 	}
 
 	// ==========================
@@ -122,11 +168,6 @@ func guestTokenHandler(w http.ResponseWriter, r *http.Request) {
 
 	if reqBody.DashboardID == "" {
 		http.Error(w, "dashboardId required", http.StatusBadRequest)
-		return
-	}
-
-	if reqBody.Tenant == "" {
-		http.Error(w, "tenant required", http.StatusBadRequest)
 		return
 	}
 
@@ -162,30 +203,24 @@ func guestTokenHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// ==========================
-	// 🔥 BUILD RLS CLAUSE
+	// 🔥 BUILD RLS CLAUSE FROM JWT
 	// ==========================
-	tenant := reqBody.Tenant
-	rlsClause := "tenant = '" + tenant + "'"
+	structuredUsername := "tenant:" + fossilTenant + ":subtenant:" + fossilSubtenant
 
-	log.Println("Applying RLS:", rlsClause)
+	log.Println("Generating FOSSIL Guest Token for:", structuredUsername)
 
-	// ==========================
-	// STEP 3: REQUEST GUEST TOKEN
-	// ==========================
 	payload := map[string]interface{}{
 		"resources": []map[string]interface{}{
 			{"type": "dashboard", "id": reqBody.DashboardID},
 		},
 
-		// 🔥 DYNAMIC RLS HERE
-		"rls": []map[string]interface{}{
-			{
-				"clause": rlsClause,
-			},
-		},
+		// 🔥 FOSSIL NATIVE RLS: Empty
+		"rls": []map[string]interface{}{},
 
 		"user": map[string]interface{}{
-			"username": "user_" + tenant,
+			"username":   structuredUsername,
+			"first_name": "FOSSIL",
+			"last_name":  fossilTenant,
 		},
 	}
 
