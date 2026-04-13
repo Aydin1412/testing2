@@ -27,9 +27,17 @@ type GuestTokenRequest struct {
 // STEP 1: LOGIN → ACCESS TOKEN
 // ==============================
 func getAccessToken(baseURL string, jar *cookiejar.Jar) (string, error) {
+	// Dynamically pull from .env
+	username := os.Getenv("SUPERSET_USERNAME")
+	password := os.Getenv("SUPERSET_PASSWORD")
+
+	if username == "" || password == "" {
+		return "", errors.New("SUPERSET_USERNAME and SUPERSET_PASSWORD must be set in .env")
+	}
+
 	payload := map[string]interface{}{
-		"username": "admin", // ⚠️ change in production
-		"password": "admin",
+		"username": username,
+		"password": password,
 		"provider": "db",
 		"refresh":  true,
 	}
@@ -98,9 +106,16 @@ func guestTokenHandler(w http.ResponseWriter, r *http.Request) {
 	// ==========================
 	// CORS
 	// ==========================
-	w.Header().Set("Access-Control-Allow-Origin", "http://172.29.121.22:3000")
+	frontendURL := os.Getenv("FRONTEND_URL")
+	if frontendURL == "" {
+		frontendURL = "*" // Fallback to allow all if not specified
+	}
+
+	// ==========================
+	// CORS
+	// ==========================
+	w.Header().Set("Access-Control-Allow-Origin", frontendURL)
 	w.Header().Set("Access-Control-Allow-Methods", "POST, OPTIONS")
-	// Allow Authorization header
 	w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
 
 	if r.Method == http.MethodOptions {

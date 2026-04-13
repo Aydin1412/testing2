@@ -1,10 +1,11 @@
 import { useEffect, useRef, useState } from "react";
 import { embedDashboard } from "@superset-ui/embedded-sdk";
 
-const DASHBOARD_ID = "2c5b735e-52d0-417b-a6ee-8db9494f187d";
-
-// 🔥 your real filter ID
-const FILTER_ID = "NATIVE_FILTER-rpYb2IKm_JiYgXccnpDIl";
+// Pull environment variables dynamically
+const DASHBOARD_ID = process.env.NEXT_PUBLIC_DEMO_DASHBOARD_ID || "";
+const FILTER_ID = process.env.NEXT_PUBLIC_FILTER_ID || "";
+const SUPERSET_DOMAIN = process.env.NEXT_PUBLIC_SUPERSET_DOMAIN || "";
+const GUEST_TOKEN_URL = process.env.NEXT_PUBLIC_GUEST_TOKEN_URL || "";
 
 export default function SupersetEmbed() {
   const ref = useRef<HTMLDivElement>(null);
@@ -40,16 +41,16 @@ export default function SupersetEmbed() {
           },
         },
       },
-      "http://159.65.7.49:8088"
+      SUPERSET_DOMAIN // Replaced hardcoded IP
     );
 
-    // 2️⃣ Apply filters (🔥 required)
+    // 2️⃣ Apply filters
     setTimeout(() => {
       embed?.postMessage?.(
         {
           type: "applyFilters",
         },
-        "http://159.65.7.49:8088"
+        SUPERSET_DOMAIN // Replaced hardcoded IP
       );
     }, 200);
   };
@@ -59,20 +60,17 @@ export default function SupersetEmbed() {
 
     const load = async () => {
       const fetchGuestToken = async () => {
-        
-        // 🔥 MOCK JWT: This simulates the user's login token in your React app.
-        // The payload inside decodes to: {"tenant":"KAJ","subtenant":"BEKASI"}
-        const mockJwt = "eyJhbGciOiJub25lIiwidHlwIjoiSldUIn0.eyJ0ZW5hbnQiOiJBTFNBTlRPIiwic3VidGVuYW50IjoiQUxTQU5UTyJ9.";
+        // Mock JWT
+        const mockJwt = "eyJhbGciOiJub25lIiwidHlwIjoiSldUIn0.eyJ0ZW5hbnQiOiJLQUoiLCJzdWJ0ZW5hbnQiOiJCRUtBU0lVVEFSQSJ9.";
 
-        const res = await fetch("http://172.29.121.22:8081/superset/guest-token", {
+        const res = await fetch(GUEST_TOKEN_URL, { // Replaced hardcoded IP
           method: "POST",
           headers: { 
             "Content-Type": "application/json",
-            "Authorization": `Bearer ${mockJwt}` // Sending credentials to backend
+            "Authorization": `Bearer ${mockJwt}`
           },
           body: JSON.stringify({
             dashboardId: DASHBOARD_ID,
-            // Removed 'tenant' from here!
           }),
         });
 
@@ -82,19 +80,17 @@ export default function SupersetEmbed() {
 
       const embed = await embedDashboard({
         id: DASHBOARD_ID,
-        supersetDomain: "http://159.65.7.49:8088",
+        supersetDomain: SUPERSET_DOMAIN, // Replaced hardcoded IP
         mountPoint: ref.current!,
         fetchGuestToken,
       });
 
       dashboardRef.current = embed;
 
-      // ✅ Apply default filter after embed is ready
       setTimeout(() => {
         applyFilter(embed, true);
       }, 600);
 
-      // iframe styling
       const styleIframe = () => {
         if (!ref.current) return;
         const iframe = ref.current.querySelector("iframe");
@@ -122,7 +118,6 @@ export default function SupersetEmbed() {
     };
   }, []);
 
-  // ✅ BUTTON TOGGLE
   const toggleActive = () => {
     const next = !activeOnly;
     setActiveOnly(next);
@@ -148,7 +143,6 @@ export default function SupersetEmbed() {
       >
         {activeOnly ? "ACTIVE" : "INACTIVE"}
       </button>
-
       <div ref={ref} style={{ width: "100%", height: "80vh" }} />
     </div>
   );
